@@ -63,5 +63,6 @@ window.HEBREW_YEARS_MAPPING = HEBREW_YEARS_MAPPING;
 window.PREDEFINED_FIELDS = PREDEFINED_FIELDS;
 window.DEFAULT_ACTIVE_FIELDS = DEFAULT_ACTIVE_FIELDS;
 
-// --- מפתח AI שיוזרק על ידי גיטהאב ---
+// --- מפתח AI שיוזרק  על ידי גיטהאב ---
+
 window.GEMINI_API_KEY = "__GEMINI_KEY_PLACEHOLDER__";
