@@ -1,8 +1,9 @@
-name: Deploy Ezer System
+name: Deploy Website with AI Key
 
 on:
   push:
     branches: ["main"]
+  workflow_dispatch: # מאפשר להריץ ידנית בלחיצת כפתור
 
 permissions:
   contents: read
@@ -23,37 +24,29 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Inject API Key into Root config.js
+      - name: Inject API Key
         env:
-          THE_SECRET: ${{ secrets.GEMINI_API_KEY }}
+          MY_SECRET: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          FILE_PATH="./config.js"
-
-          if [ ! -f "$FILE_PATH" ]; then
-            echo "❌ Error: config.js NOT found in root directory!"
-            ls -R # מדפיס את רשימת הקבצים כדי שתראה איפה הוא כן נמצא
+          # בדיקה אם המפתח קיים בהגדרות
+          if [ -z "$MY_SECRET" ]; then
+            echo "Error: GEMINI_API_KEY not found in GitHub Secrets!"
             exit 1
           fi
 
-          echo "✅ Found config.js in root."
-
-          # ביצוע ההחלפה
-          sed -i "s|__GEMINI_KEY_PLACEHOLDER__|$THE_SECRET|g" "$FILE_PATH"
-
-          # בדיקה אם הפלייסהולדר עדיין קיים
-          if grep -q "__GEMINI_KEY_PLACEHOLDER__" "$FILE_PATH"; then
-            echo "❌ CRITICAL ERROR: Injection failed! Placeholder still exists."
-            exit 1
-          else
-            echo "✅ SUCCESS: Key injected successfully into root config.js."
-          fi
+          # החלפת הפלייסהולדר במפתח האמיתי בתוך config.js
+          sed -i "s|__GEMINI_KEY_PLACEHOLDER__|$MY_SECRET|g" config.js
+          
+          echo "✅ API Key injected successfully."
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
