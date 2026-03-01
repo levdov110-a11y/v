@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Code Studio - Ultimate Edition</title>
+    <title>AI Code Studio - Ultimate Editor</title>
+    <!-- העלמת אזהרת Tailwind -->
     <script>
-        // העלמת אזהרת Tailwind מהקונסול
         const originalWarn = console.warn;
         console.warn = function(...args) { if (args[0] && args[0].includes('cdn.tailwindcss.com')) return; originalWarn.apply(console, args); };
     </script>
@@ -14,130 +14,106 @@
     <style>
         body { background-color: #1e1e1e; color: #d4d4d4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
         .sidebar { background-color: #252526; border-left: 1px solid #3c3c3c; height: calc(100vh - 60px); }
-        .editor-container { height: calc(100vh - 200px); }
+        .editor-container { height: calc(100vh - 200px); min-width: 0; /* Prevents flexbox overflow */ }
         .chat-container { height: 140px; background-color: #1e1e1e; border-top: 1px solid #3c3c3c; z-index: 10; }
-        .file-item { cursor: pointer; padding: 8px 16px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; group; }
+        
+        /* עיצוב רשימת הקבצים */
+        .file-item { cursor: pointer; padding: 12px 16px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
         .file-item:hover { background-color: #2a2d2e; }
-        .file-item.active { background-color: #37373d; border-right: 3px solid #007acc; }
-        .file-item .delete-btn { display: none; color: #f87171; padding: 2px 6px; border-radius: 4px; }
-        .file-item:hover .delete-btn { display: block; }
-        .file-item .delete-btn:hover { background-color: #7f1d1d; }
-        .modified-badge { background-color: #d7ba7d; color: black; font-size: 0.7rem; padding: 2px 6px; border-radius: 12px; font-weight: bold; display: none; }
+        .file-item.active { background-color: #37373d; border-right: 4px solid #3b82f6; }
+        
+        /* עיצוב בולט מאוד לקובץ ששונה */
+        .file-item.modified { background-color: #422006; border-right: 4px solid #eab308; }
+        .file-item.modified:hover { background-color: #451a03; }
+        
+        @keyframes pulse-yellow { 0% { opacity: 0.8; } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.8; } }
+        .modified-badge { background-color: #eab308; color: black; font-size: 0.8rem; padding: 4px 10px; border-radius: 12px; font-weight: bold; display: none; animation: pulse-yellow 2s infinite; }
         .file-item.modified .modified-badge { display: block; }
+
         #preview-frame { width: 100%; height: 100%; background: white; border: none; display: none; }
         #monaco-editor, #monaco-diff-editor { width: 100%; height: 100%; }
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 50; }
         .modal-content { background: #252526; margin: 10% auto; padding: 20px; width: 50%; border: 1px solid #3c3c3c; border-radius: 8px; }
-        
-        /* Mic Animation */
-        @keyframes pulse-red { 0% { background-color: #ef4444; } 50% { background-color: #991b1b; } 100% { background-color: #ef4444; } }
-        .mic-active { animation: pulse-red 1.5s infinite; color: white !important; }
-        
-        /* Toast Notification */
-        #toast { position: fixed; bottom: -100px; left: 20px; background: #333; color: white; padding: 16px 24px; border-radius: 8px; border-right: 4px solid #3b82f6; transition: bottom 0.4s ease-in-out; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.3); max-width: 400px; }
-        #toast.show { bottom: 20px; }
     </style>
 </head>
 <body class="flex flex-col h-screen text-sm">
 
-    <!-- Header -->
+    <!-- Header / Toolbar -->
     <header class="h-[60px] bg-[#333333] flex items-center justify-between px-4 shadow-md z-10 min-w-max">
-        <div class="flex items-center gap-2">
-            <h1 class="text-xl font-bold text-white tracking-wide ml-2">🤖 AI Studio</h1>
-            
-            <button onclick="document.getElementById('file-upload').click()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition shadow text-xs">
-                + העלה
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-bold text-white tracking-wide">🤖 AI Code Studio</h1>
+            <button onclick="document.getElementById('file-upload').click()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded transition font-bold shadow-lg">
+                + העלה קבצים
             </button>
             <input type="file" id="file-upload" multiple class="hidden" onchange="handleFileUpload(event)">
             
-            <button onclick="clearAllFiles()" class="bg-red-900 hover:bg-red-800 text-white px-3 py-1.5 rounded transition shadow text-xs">
-                נקה הכל
-            </button>
-
-            <!-- Font Size Controls -->
-            <div class="flex bg-[#1e1e1e] border border-[#3c3c3c] rounded overflow-hidden mr-2">
-                <button onclick="changeFontSize(1)" class="px-3 py-1 hover:bg-[#3c3c3c] text-white" title="הגדל טקסט">A+</button>
-                <button onclick="changeFontSize(-1)" class="px-3 py-1 hover:bg-[#3c3c3c] text-white border-r border-[#3c3c3c]" title="הקטן טקסט">A-</button>
+            <!-- שליטה בגודל טקסט -->
+            <div class="flex bg-[#1e1e1e] border border-[#3c3c3c] rounded overflow-hidden mr-4">
+                <button onclick="changeFontSize(2)" class="px-3 py-1 hover:bg-[#3c3c3c] text-white font-bold" title="הגדל טקסט">A+</button>
+                <button onclick="changeFontSize(-2)" class="px-3 py-1 hover:bg-[#3c3c3c] text-white border-r border-[#3c3c3c] font-bold" title="הקטן טקסט">A-</button>
             </div>
         </div>
         
-        <div class="flex items-center gap-2">
-            <select id="ai-model" class="bg-[#1e1e1e] text-white border border-[#3c3c3c] px-2 py-1.5 rounded outline-none font-semibold text-xs">
-                <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (הכי חדש שעובד)</option>
-                <option value="gemini-1.5-pro">Gemini 2.5 Pro (יציב)</option>
-                <option disabled>--- מודלים עתידיים ---</option>
-                <option value="gemini-3.1-pro-thinking">Gemini 3.1 Pro (Thinking Mode)</option>
-                <option value="gemini-3.1-flash">Gemini 3.1 Flash</option>
-                <option value="gemini-3.0-pro">Gemini 3.0 Pro</option>
-                <option value="gemini-3.0-flash">Gemini 3.0 Flash</option>
+        <div class="flex items-center gap-3">
+            <select id="ai-model" class="bg-[#1e1e1e] text-yellow-400 border border-[#3c3c3c] px-3 py-1.5 rounded outline-none font-bold">
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (מומלץ)</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                 <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
+                <option value="gemini-3.0-flash">Gemini 3.0 Flash</option>
+                <option value="gemini-3.0-pro">Gemini 3.0 Pro</option>
             </select>
-            <button onclick="openKeyModal()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded transition text-xs">
-                🔑 מפתחות
+            <button onclick="openKeyModal()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-1.5 rounded transition flex gap-2 items-center font-bold">
+                <span>🔑</span> הזנת מפתחות (RAM)
             </button>
-            <button onclick="downloadFiles()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded transition text-xs">
-                📥 הורד קוד
+            <button onclick="runPreview()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded transition flex gap-2 items-center font-bold">
+                <span>▶️</span> תצוגה מקדימה
             </button>
-            <button onclick="runPreview()" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded transition text-xs flex gap-1">
-                <span>▶️</span> הרץ
-            </button>
-            <button onclick="togglePreview()" id="toggle-preview-btn" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded transition text-xs">
-                תצוגה/קוד
+            <button onclick="togglePreview()" id="toggle-preview-btn" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-1.5 rounded transition">
+                חזור לקוד
             </button>
         </div>
     </header>
 
-    <!-- Workspace -->
+    <!-- Main Workspace -->
     <div class="flex flex-1 overflow-hidden">
         
-        <!-- Sidebar -->
+        <!-- Sidebar (Files) -->
         <div class="sidebar w-64 flex-shrink-0 flex flex-col">
-            <div class="p-3 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-[#3c3c3c] flex justify-between items-center">
-                <span>סייר קבצים</span>
-                <span id="file-count" class="bg-[#3c3c3c] px-2 rounded-full text-white">0</span>
+            <div class="p-3 text-sm font-bold text-gray-300 uppercase tracking-wider border-b border-[#3c3c3c]">
+                סייר קבצים
             </div>
-            <div id="file-list" class="overflow-y-auto flex-1"></div>
+            <div id="file-list" class="overflow-y-auto flex-1 overflow-x-hidden">
+                <!-- File items will go here -->
+            </div>
         </div>
 
-        <!-- Editor Area -->
-        <div class="flex-1 flex flex-col relative bg-[#1e1e1e]">
+        <!-- Editor / Preview Area -->
+        <div class="flex-1 flex flex-col relative bg-[#1e1e1e] min-w-0">
             
-            <!-- Contextual Toolbar for Diff View -->
-            <div id="diff-toolbar" class="hidden bg-[#2d2d30] p-2 flex justify-between items-center border-b border-[#3c3c3c]">
-                <span class="text-yellow-400 text-xs font-bold">צפייה בשינויי AI (Diff Mode)</span>
-                <button onclick="acceptChanges()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-1 rounded text-xs font-bold transition">
+            <!-- סרגל אישור שינויים (מופיע רק כשיש שינוי) -->
+            <div id="diff-toolbar" class="hidden bg-[#2d2d30] p-3 justify-between items-center border-b border-[#3c3c3c]">
+                <span class="text-yellow-400 font-bold text-base">⚠️ שים לב: ה-AI ביצע שינויים בקובץ זה. צד ימין: חדש, צד שמאל: ישן.</span>
+                <button onclick="acceptChanges()" class="bg-green-600 hover:bg-green-500 text-white px-6 py-1.5 rounded text-sm font-bold transition shadow-lg">
                     ✔️ אשר שינויים לקובץ זה
                 </button>
             </div>
 
-            <div class="editor-container flex-1 relative">
+            <div class="editor-container flex-1 relative min-w-0">
                 <div id="monaco-editor"></div>
                 <div id="monaco-diff-editor" style="display: none;"></div>
                 <iframe id="preview-frame"></iframe>
             </div>
 
-            <!-- Chat Area with Voice -->
+            <!-- Chat & Prompt Area -->
             <div class="chat-container p-4 flex flex-col gap-2 relative">
-                <div class="flex justify-between items-center text-xs text-gray-400">
-                    <div class="flex items-center gap-3">
-                        <span>בקש מה-AI לבצע שינויים:</span>
-                        <label class="flex items-center gap-1 cursor-pointer text-blue-400 hover:text-blue-300">
-                            <input type="checkbox" id="voice-output-toggle" checked class="accent-blue-500 cursor-pointer">
-                            <span>🔊 השמע תשובה</span>
-                        </label>
-                    </div>
+                <div class="flex justify-between items-center text-sm font-bold text-gray-300">
+                    <span>בקש מה-AI לבצע שינויים בקוד (יזריק ישירות לקובץ):</span>
+                    <span id="status-text" class="text-gray-400">מוכן לפעולה</span>
                 </div>
-                <div class="flex gap-2 h-full relative">
-                    <button id="mic-btn" onclick="toggleVoiceTyping()" class="absolute right-2 top-2 p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition" title="הקלדה קולית">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                    </button>
-                    
-                    <textarea id="ai-prompt" class="flex-1 bg-[#252526] border border-[#3c3c3c] text-white p-2 pr-12 rounded resize-none outline-none focus:border-blue-500 text-base" placeholder="הקלד או לחץ על המיקרופון כדי לדבר..."></textarea>
-                    
+                <div class="flex gap-2 h-full">
+                    <textarea id="ai-prompt" class="flex-1 bg-[#252526] border border-[#3c3c3c] text-white p-3 rounded resize-none outline-none focus:border-blue-500 text-base" placeholder="דוגמה: תשנה את צבע הכפתור ב-index.html לכחול ותוסיף פונקציית לחיצה ב-JS..."></textarea>
                     <button id="submit-btn" onclick="processAIRequest()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 rounded transition font-bold text-lg flex items-center gap-2">
-                        <span>🚀</span> בצע
+                        <span>🚀</span> בצע שינוי
                     </button>
                 </div>
             </div>
@@ -147,163 +123,133 @@
     <!-- API Keys Modal -->
     <div id="key-modal" class="modal">
         <div class="modal-content">
-            <h2 class="text-xl mb-4 font-bold">מפתחות API (RAM בלבד)</h2>
-            <p class="text-xs text-gray-400 mb-3">הכנס מפתחות של Google Gemini מופרדים בפסיק. <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400">להנפקת מפתח בחינם</a></p>
-            <textarea id="api-keys-input" class="w-full h-24 bg-[#1e1e1e] border border-[#3c3c3c] text-white p-2 rounded mb-4 text-left" dir="ltr" placeholder="AIzaSy..."></textarea>
+            <h2 class="text-xl mb-4 font-bold text-white">מפתחות API של Gemini</h2>
+            <p class="text-sm text-gray-400 mb-4">הכנס מפתחות מופרדים בפסיקים. המערכת תדלג אוטומטית למפתח הבא במקרה של חסימת עומס (Rate Limit). המפתחות נמחקים בסגירת הדפדפן.</p>
+            <textarea id="api-keys-input" class="w-full h-24 bg-[#1e1e1e] border border-[#3c3c3c] text-white p-2 rounded mb-4" dir="ltr" placeholder="AIzaSy..."></textarea>
             <div class="flex justify-end gap-2">
-                <button onclick="closeKeyModal()" class="bg-gray-600 px-4 py-2 rounded">ביטול</button>
-                <button onclick="saveKeys()" class="bg-blue-600 px-4 py-2 rounded font-bold">שמור לזיכרון</button>
+                <button onclick="closeKeyModal()" class="bg-gray-600 px-4 py-2 rounded text-white">ביטול</button>
+                <button onclick="saveKeys()" class="bg-blue-600 px-4 py-2 rounded text-white font-bold">שמור לזיכרון</button>
             </div>
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast">
-        <div id="toast-title" class="font-bold text-lg mb-1">כותרת</div>
-        <div id="toast-msg" class="text-sm text-gray-200">הודעה</div>
-    </div>
-
     <script>
-        // --- State Management ---
+        // --- ניהול מצב האפליקציה ---
         let filesData = {}; 
         let currentActiveFile = null;
         let apiKeys = [];
         let currentKeyIndex = 0;
+        let currentFontSize = 16;
+        
         let standardEditor, diffEditor, diffOriginalModel, diffModifiedModel;
         let showPreviewMode = false;
-        let currentFontSize = 14;
 
-        // --- Toast System ---
-        function showToast(title, message, isError = false) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toast-title').innerText = title;
-            document.getElementById('toast-msg').innerText = message;
-            toast.style.borderRightColor = isError ? '#ef4444' : '#10b981';
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 5000);
-        }
-
-        // --- Voice Setup ---
-        let recognition = null;
-        let isRecording = false;
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
-            recognition.lang = 'he-IL';
-            recognition.continuous = false;
-            recognition.onresult = (event) => { document.getElementById('ai-prompt').value += (document.getElementById('ai-prompt').value ? " " : "") + event.results[0][0].transcript; };
-            recognition.onend = () => { isRecording = false; document.getElementById('mic-btn').classList.remove('mic-active'); };
-        }
-
-        function toggleVoiceTyping() {
-            if (!recognition) return showToast("שגיאה", "הדפדפן אינו תומך בהקלדה קולית", true);
-            if (isRecording) recognition.stop();
-            else { recognition.start(); isRecording = true; document.getElementById('mic-btn').classList.add('mic-active'); }
-        }
-
-        function speakAIResponse(text) {
-            if (!document.getElementById('voice-output-toggle').checked || !('speechSynthesis' in window)) return;
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'he-IL';
-            window.speechSynthesis.speak(utterance);
-        }
-
-        // --- Monaco Editor Initialization ---
+        // --- אתחול עורך Monaco ---
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' }});
         require(['vs/editor/editor.main'], function() {
+            
+            // הגדרות עורך - כולל שבירת שורות (wordWrap) כדי שלא יברח הצידה בהגדלה!
+            const editorOptions = {
+                theme: 'vs-dark',
+                automaticLayout: true,
+                fontSize: currentFontSize,
+                wordWrap: 'on', // מונע גלילה אופקית, שובר שורות למטה
+                minimap: { enabled: false } // חוסך מקום במסך
+            };
+
             standardEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
-                value: "// המערכת מוכנה. העלה קבצים כדי להתחיל...", theme: 'vs-dark', automaticLayout: true, fontSize: currentFontSize
+                value: "// העלה קבצים כדי להתחיל...",
+                readOnly: false,
+                ...editorOptions
             });
+
             diffEditor = monaco.editor.createDiffEditor(document.getElementById('monaco-diff-editor'), {
-                theme: 'vs-dark', automaticLayout: true, readOnly: true, fontSize: currentFontSize
+                readOnly: true,
+                ...editorOptions
+            });
+
+            // לכידת הודעות Console מה-Iframe
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.source === 'iframe-console') {
+                    console[event.data.level](...event.data.args);
+                }
             });
         });
 
+        // --- פונקציות זום (שינוי גודל טקסט) ---
         function changeFontSize(delta) {
-            currentFontSize = Math.max(10, Math.min(30, currentFontSize + (delta * 2)));
-            standardEditor.updateOptions({ fontSize: currentFontSize });
-            diffEditor.updateOptions({ fontSize: currentFontSize });
+            currentFontSize = Math.max(10, Math.min(40, currentFontSize + delta));
+            if(standardEditor) standardEditor.updateOptions({ fontSize: currentFontSize });
+            if(diffEditor) diffEditor.updateOptions({ fontSize: currentFontSize });
         }
 
-        // --- File Management ---
+        // --- טיפול בקבצים ---
+        function getLanguage(filename) {
+            if (filename.endsWith('.html')) return 'html';
+            if (filename.endsWith('.css')) return 'css';
+            if (filename.endsWith('.js')) return 'javascript';
+            if (filename.endsWith('.json')) return 'json';
+            return 'plaintext';
+        }
+
         async function handleFileUpload(event) {
-            for (let file of event.target.files) {
-                const text = await file.text();
-                filesData[file.name] = { 
-                    original: text, modified: text, isModified: false, 
-                    language: file.name.endsWith('.html') ? 'html' : file.name.endsWith('.css') ? 'css' : file.name.endsWith('.js') ? 'javascript' : 'plaintext' 
+            const files = event.target.files;
+            for (let file of files) {
+                const text = await file.text(); 
+                filesData[file.name] = {
+                    original: text, 
+                    modified: text, 
+                    isModified: false, 
+                    language: getLanguage(file.name) 
                 };
             }
-            renderFileList();
-            if (event.target.files.length > 0 && !currentActiveFile) openFile(event.target.files[0].name);
-            event.target.value = ''; // Reset input
-        }
-
-        function deleteFile(filename, event) {
-            event.stopPropagation();
-            if(confirm(`האם אתה בטוח שברצונך למחוק את ${filename}?`)) {
-                delete filesData[filename];
-                if(currentActiveFile === filename) {
-                    currentActiveFile = null;
-                    standardEditor.setValue("// קובץ נמחק");
-                }
-                renderFileList();
-                if(Object.keys(filesData).length > 0) openFile(Object.keys(filesData)[0]);
-            }
-        }
-
-        function clearAllFiles() {
-            if(confirm("למחוק את כל הקבצים מהסביבה?")) {
-                filesData = {};
-                currentActiveFile = null;
-                standardEditor.setValue("");
-                renderFileList();
-            }
+            document.getElementById('file-upload').value = '';
+            renderFileList(); 
+            if (files.length > 0 && !currentActiveFile) openFile(files[0].name);
         }
 
         function renderFileList() {
             const list = document.getElementById('file-list');
-            list.innerHTML = '';
-            let count = 0;
+            list.innerHTML = ''; 
             for (let filename in filesData) {
-                count++;
                 const div = document.createElement('div');
+                // הוספת מחלקת "modified" צובעת את כל השורה ומוסיפה תגית מהבהבת!
                 div.className = `file-item ${currentActiveFile === filename ? 'active' : ''} ${filesData[filename].isModified ? 'modified' : ''}`;
-                div.onclick = () => openFile(filename);
+                div.onclick = () => openFile(filename); 
                 div.innerHTML = `
-                    <div class="flex flex-col w-full">
-                        <div class="flex justify-between items-center w-full">
-                            <span class="truncate w-3/4 text-left" dir="ltr">${filename}</span>
-                            <button onclick="deleteFile('${filename}', event)" class="delete-btn" title="מחק קובץ">🗑️</button>
-                        </div>
-                        <span class="modified-badge self-start mt-1">שונה (Diff)</span>
-                    </div>
+                    <span class="truncate" dir="ltr">${filename}</span>
+                    <span class="modified-badge">ממתין לאישור!</span>
                 `;
                 list.appendChild(div);
             }
-            document.getElementById('file-count').innerText = count;
         }
 
         function openFile(filename) {
-            currentActiveFile = filename;
-            renderFileList();
-            showPreviewMode = false;
+            currentActiveFile = filename; 
+            renderFileList(); 
+            
+            showPreviewMode = false; 
             document.getElementById('preview-frame').style.display = 'none';
 
-            const file = filesData[filename];
-            if (!file) return;
-
+            const file = filesData[filename]; 
+            if(!file) return;
+            
             if (file.isModified) {
+                // מצב השוואה (Diff) - חושף את סרגל האישור
                 document.getElementById('monaco-editor').style.display = 'none';
                 document.getElementById('monaco-diff-editor').style.display = 'block';
                 document.getElementById('diff-toolbar').classList.remove('hidden');
                 document.getElementById('diff-toolbar').classList.add('flex');
-
-                if (!diffOriginalModel) diffOriginalModel = monaco.editor.createModel(file.original, file.language); else diffOriginalModel.setValue(file.original);
-                if (!diffModifiedModel) diffModifiedModel = monaco.editor.createModel(file.modified, file.language); else diffModifiedModel.setValue(file.modified);
+                
+                if (!diffOriginalModel) diffOriginalModel = monaco.editor.createModel(file.original, file.language);
+                else diffOriginalModel.setValue(file.original);
+                
+                if (!diffModifiedModel) diffModifiedModel = monaco.editor.createModel(file.modified, file.language);
+                else diffModifiedModel.setValue(file.modified);
+                
                 diffEditor.setModel({ original: diffOriginalModel, modified: diffModifiedModel });
             } else {
+                // מצב רגיל
                 document.getElementById('monaco-editor').style.display = 'block';
                 document.getElementById('monaco-diff-editor').style.display = 'none';
                 document.getElementById('diff-toolbar').classList.add('hidden');
@@ -316,90 +262,74 @@
 
         function acceptChanges() {
             if(!currentActiveFile || !filesData[currentActiveFile]) return;
-            // The modified code becomes the new original
+            // שומר את הקוד החדש כקבוע ומבטל את מצב ה-Diff
             filesData[currentActiveFile].original = filesData[currentActiveFile].modified;
             filesData[currentActiveFile].isModified = false;
-            showToast("שינויים נשמרו", `הקובץ ${currentActiveFile} עודכן סופית.`);
-            openFile(currentActiveFile); // Will reload as standard editor
+            openFile(currentActiveFile);
+            setStatus("השינויים אושרו ונשמרו בקובץ!", "#00ff00");
         }
 
-        function downloadFiles() {
-            if(Object.keys(filesData).length === 0) return showToast("שגיאה", "אין קבצים להורדה", true);
-            for (let filename in filesData) {
-                const blob = new Blob([filesData[filename].modified], { type: "text/plain" });
-                const link = document.createElement("a");
-                link.href = URL.createObjectURL(blob);
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
-            showToast("הצלחה", "הקבצים הורדו למחשב שלך");
-        }
-
-        // --- API Keys ---
+        // --- מפתחות API ---
         function openKeyModal() { document.getElementById('key-modal').style.display = 'block'; }
         function closeKeyModal() { document.getElementById('key-modal').style.display = 'none'; }
         function saveKeys() {
-            apiKeys = document.getElementById('api-keys-input').value.split(',').map(k => k.trim()).filter(k => k !== '');
-            currentKeyIndex = 0;
-            document.getElementById('api-keys-input').value = '';
+            const input = document.getElementById('api-keys-input').value;
+            apiKeys = input.split(',').map(k => k.trim()).filter(k => k !== ''); 
+            currentKeyIndex = 0; 
+            alert(`נשמרו ${apiKeys.length} מפתחות בזיכרון.`);
+            document.getElementById('api-keys-input').value = ''; 
             closeKeyModal();
-            showToast("מפתחות נשמרו", `נשמרו ${apiKeys.length} מפתחות בזיכרון המערכת`);
         }
 
-        // --- AI Process ---
+        // --- לוגיקת AI ---
+        function setStatus(text, color="gray") {
+            const el = document.getElementById('status-text');
+            el.innerText = text;
+            el.style.color = color;
+        }
+
         async function processAIRequest() {
             const prompt = document.getElementById('ai-prompt').value;
-            if (!prompt) return showToast("שגיאה", "אנא כתוב או הקלט מה ברצונך לשנות", true);
-            if (Object.keys(filesData).length === 0) return showToast("שגיאה", "לא הועלו קבצים. אנא העלה קבצים קודם.", true);
-            if (apiKeys.length === 0) return showToast("שגיאה", "חסר מפתח API. לחץ על כפתור המפתחות למעלה.", true);
+            if (!prompt) return alert("אנא כתוב מה תרצה לשנות");
+            if (Object.keys(filesData).length === 0) return alert("אנא העלה קבצים קודם");
+            if (apiKeys.length === 0) return alert("אנא לחץ על כפתור 'הזנת מפתחות' והכנס מפתח API");
 
             const model = document.getElementById('ai-model').value;
             const btn = document.getElementById('submit-btn');
-            const originalBtnHtml = btn.innerHTML;
-            btn.innerHTML = `⏳ חושב...`;
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = `⏳ ממתין לתשובה...`;
             btn.disabled = true;
-
-            let filesContext = "Current Files Content:\n";
-            for (let f in filesData) { filesContext += `\n--- FILE: ${f} ---\n${filesData[f].modified}\n`; }
+            
+            let filesContext = "Current Files:\n";
+            for (let f in filesData) {
+                filesContext += `--- FILE: ${f} ---\n${filesData[f].modified}\n\n`;
+            }
 
             const systemInstruction = `
-You are an expert coder. Modify the user's code.
-To save tokens, output ONLY a JSON object. NO markdown, NO \`\`\`json.
+You are an expert programmer. Modify the user's code.
+CRITICAL: DO NOT output full file contents. To save tokens, output ONLY the exact lines to search for and replace.
+Return ONLY a valid JSON array. NO markdown formatting.
 Format:
-{
-  "message": "A short summary IN HEBREW of what you changed.",
-  "changes": [
-    {
-      "filename": "exact file name",
-      "search": "exact string to replace (must match perfectly)",
-      "replace": "the new string"
-    }
-  ]
-}`;
+[
+  {
+    "filename": "file name",
+    "search": "exact string to find",
+    "replace": "new string to insert"
+  }
+]
+`;
             const fullPrompt = `${systemInstruction}\n\n${filesContext}\n\nUser Request: ${prompt}`;
+            setStatus("ה-AI קורא את הקבצים שלך ומייצר קוד...", "#eab308");
 
             try {
                 let aiResponseJson = await fetchWithKeyRotation(model, fullPrompt);
-                if(aiResponseJson.message) speakAIResponse(aiResponseJson.message);
-                
-                if(aiResponseJson.changes && aiResponseJson.changes.length > 0) {
-                    let count = applySmartInjection(aiResponseJson.changes);
-                    if(count > 0) {
-                        showToast("פעולה הושלמה!", `ה-AI ביצע ${count} שינויים. ${aiResponseJson.message}`);
-                        document.getElementById('ai-prompt').value = ''; // clear prompt
-                    } else {
-                        showToast("בעיה בהזרקה", "ה-AI הביא קוד, אך לא מצא היכן להזריק אותו במדויק. נסה לנסח אחרת.", true);
-                    }
-                } else {
-                    showToast("מידע", aiResponseJson.message || "ה-AI לא החזיר שינויי קוד.");
-                }
+                applySmartInjection(aiResponseJson);
+                document.getElementById('ai-prompt').value = ""; // ניקוי התיבה אחרי הצלחה
             } catch (error) {
-                showToast("שגיאת מערכת / API", error.message, true);
+                setStatus("שגיאה: " + error.message, "#ef4444");
                 console.error(error);
             } finally {
-                btn.innerHTML = originalBtnHtml;
+                btn.innerHTML = origHtml;
                 btn.disabled = false;
             }
         }
@@ -409,55 +339,71 @@ Format:
                 const key = apiKeys[currentKeyIndex];
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
                 
+                const body = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.1 } 
+                };
+
                 const res = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
+                    body: JSON.stringify(body)
                 });
 
-                if (res.status === 429) { currentKeyIndex++; continue; }
-                if (res.status === 404) {
-                    throw new Error(`המודל ${model} חסר או שאינו קיים עדיין בשרתי גוגל. אנא בחר מודל שונה (כמו Gemini 2.0) מהרשימה ונסה שוב.`);
+                if (res.status === 429) {
+                    currentKeyIndex++;
+                    continue; 
                 }
-                if (res.status === 400) {
-                    throw new Error("מפתח ה-API אינו תקין או שיש שגיאה בבקשה. ודא שהמפתח מדויק.");
-                }
-                if (!res.ok) throw new Error(`שגיאת רשת פנימית: קוד ${res.status}`);
+
+                if (!res.ok) throw new Error(`API Error: ${res.status} ${res.statusText}`);
 
                 const data = await res.json();
                 let textResult = data.candidates[0].content.parts[0].text;
                 textResult = textResult.replace(/```json/g, '').replace(/```/g, '').trim();
-                return JSON.parse(textResult);
+                return JSON.parse(textResult); 
             }
-            throw new Error("כל מפתחות ה-API נוצלו או חסומים (Rate Limit). הזן מפתחות חדשים.");
+            throw new Error("כל המפתחות חסומים או שגויים.");
         }
 
         function applySmartInjection(changesArray) {
-            let changesMade = 0;
+            let changesMade = 0; 
+            let firstModifiedFile = null;
+
             for (let change of changesArray) {
                 const file = filesData[change.filename];
-                if (!file) continue;
+                if (!file) continue; 
 
-                // Simple text replacement
                 if (file.modified.includes(change.search)) {
                     file.modified = file.modified.replace(change.search, change.replace);
-                    file.isModified = true;
+                    file.isModified = true; 
                     changesMade++;
+                    if(!firstModifiedFile) firstModifiedFile = change.filename;
                 }
             }
-            if (changesMade > 0) { renderFileList(); if (currentActiveFile) openFile(currentActiveFile); }
-            return changesMade;
+
+            if (changesMade > 0) {
+                setStatus(`הזרקה הצליחה! הקובץ ${firstModifiedFile} נפתח להשוואה.`, "#10b981");
+                renderFileList(); 
+                // הקסם: פותח אוטומטית את הקובץ שהשתנה כדי שהמשתמש יראה מיד!
+                openFile(firstModifiedFile);
+            } else {
+                setStatus("ה-AI החזיר תשובה, אך לא הצליח להזריק אותה (לא נמצאה התאמה מדויקת).", "#ef4444");
+            }
         }
 
-        // --- Preview Mode ---
+        // --- תצוגה מקדימה ---
         function togglePreview() {
-            showPreviewMode = !showPreviewMode;
-            if (showPreviewMode) runPreview(); 
-            else { document.getElementById('preview-frame').style.display = 'none'; if (currentActiveFile) openFile(currentActiveFile); }
+            showPreviewMode = !showPreviewMode; 
+            if (showPreviewMode) {
+                runPreview(); 
+            } else {
+                document.getElementById('preview-frame').style.display = 'none'; 
+                if (currentActiveFile) openFile(currentActiveFile); 
+            }
         }
 
         function runPreview() {
-            showPreviewMode = true;
+            showPreviewMode = true; 
             document.getElementById('monaco-editor').style.display = 'none';
             document.getElementById('monaco-diff-editor').style.display = 'none';
             document.getElementById('diff-toolbar').classList.add('hidden');
@@ -465,13 +411,32 @@ Format:
             iframe.style.display = 'block';
 
             let htmlContent = "", cssContent = "", jsContent = "";
+
             for (let f in filesData) {
                 if (f.endsWith('.html')) htmlContent += filesData[f].modified;
                 if (f.endsWith('.css')) cssContent += filesData[f].modified;
                 if (f.endsWith('.js')) jsContent += filesData[f].modified;
             }
 
-            iframe.srcdoc = `<!DOCTYPE html><html><head><style>${cssContent}</style></head><body>${htmlContent || "<h2 style='font-family:sans-serif;text-align:center;margin-top:20px'>לא נמצא קובץ HTML לתצוגה</h2>"}<script>${jsContent}<\/script></body></html>`;
+            const consoleCaptureScript = `<script>
+                (function(){
+                    const og = window.console;
+                    function create(m) {
+                        return function(...args){
+                            og[m](...args);
+                            try { window.parent.postMessage({source:'iframe-console', level:m, args}, '*'); } catch(e){}
+                        };
+                    }
+                    window.console = { log:create('log'), warn:create('warn'), error:create('error') };
+                })();
+            <\/script>`;
+
+            iframe.srcdoc = `
+                <!DOCTYPE html><html><head><style>${cssContent}</style></head>
+                <body>${consoleCaptureScript}${htmlContent || "<h2 style='font-family:sans-serif'>לא נמצא קובץ HTML</h2>"}
+                <script>${jsContent}<\/script></body></html>
+            `;
+            setStatus("מצב תצוגה מקדימה פעיל", "#3b82f6");
         }
     </script>
 </body>
